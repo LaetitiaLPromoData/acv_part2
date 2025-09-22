@@ -3,6 +3,7 @@ import mediapipe as mp
 from pathlib import Path
 import os
 import pandas as pd
+import pickle as pk
 
 drawing_utils = mp.solutions.drawing_utils
 drawing_styles = mp.solutions.drawing_styles
@@ -127,7 +128,7 @@ def process_image(folder_path, mediapipe_model, indices):
     database.to_csv("database.csv")
     return database
 
-def detection_pompe(mediapipe_model, indices):
+def detection_pompe(mediapipe_model, indices, classifier):
     """Run a media pipe model on each video frame grabbed by the webcam and draw results on it
 
     Args:
@@ -137,6 +138,10 @@ def detection_pompe(mediapipe_model, indices):
     Returns:
         np.ndarray, mediapipe model result
     """
+    #initialisation de variable
+    counter = 0
+    debut_pompe = False
+    
     cap = cv2.VideoCapture(0)
 
     try:
@@ -156,41 +161,54 @@ def detection_pompe(mediapipe_model, indices):
                 if results and results.pose_landmarks:
                     list_pos = extract_pose(image, model, indices)
                     if list_pos != 0:
+                        #formatage des valeurs
+                        flat_list = [coord for landmark in list_pos for coord in landmark]
                         #applique le classifier
-                        counter = 0
-                        predicted_class = 0
-                        if predicted_class == 0:
+                        # predicted_class = int(classifier.predict([flat_list]))
+                        probas = classifier.predict_proba([flat_list])[0]
+
+                        thresholds = [0.6, 0.5, 0.5]  # seuil pour chaque classe : bas, haut, autre
+
+                        if probas[0] > thresholds[0]:
+                            label = "bas"
                             debut_pompe = True
-                        if predicted_class == 1 and debut_pompe == True:
-                            counter += 1
-                            debut_pompe = False
+                        elif probas[1] > thresholds[1]:
+                            label = "haut"
+                            if debut_pompe:
+                                counter += 1
+                                debut_pompe = False
+                        else :
+                            label = "autre"
+
 
                         #affichage de la classe:
                         cv2.putText(
                             image,
-                            f"Class: {predicted_class}",
+                            f"Class: {label}",
                             (30, 50),                  # position (x, y)
                             cv2.FONT_HERSHEY_SIMPLEX,
                             1,                          # taille du texte
-                            (0, 255, 0),               # couleur verte
+                            (100, 255, 0),               # couleur verte
                             2,
                             cv2.LINE_AA
                         )
-                        # --- Affichage du compteur ---
-                        cv2.putText(
-                            image,
-                            f"Count: {counter}",
-                            (30, 100),                 # juste en dessous de la classe
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            1,
-                            (0, 255, 255),             # couleur jaune
-                            2,
-                            cv2.LINE_AA
-                        )
+
                         result_image = image
 
                 else:
                     result_image = image
+                
+                # --- Affichage du compteur ---
+                cv2.putText(
+                    result_image,
+                    f"Count: {counter}",
+                    (30, 100),                 # juste en dessous de la classe
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (255, 0, 0),             # couleur jaune
+                    2,
+                    cv2.LINE_AA
+                )
 
                 cv2.imshow('MediaPipe', result_image)
 
@@ -206,7 +224,12 @@ def detection_pompe(mediapipe_model, indices):
 def main():
     mediapipe_model=Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5)
     indices = [12,14,16,11,13,15,23,24]
-    last_image, last_results = detection_pompe(mediapipe_model=mediapipe_model,indices=indices)
+
+    #chargement du modèle
+    with open("knn_pipeline.pkl", "rb") as f:
+        classifier = pk.load(f)
+
+    last_image, last_results = detection_pompe(mediapipe_model=mediapipe_model,indices=indices, classifier=classifier)
 
 
     # image_folder = Path("Images-pompes")
