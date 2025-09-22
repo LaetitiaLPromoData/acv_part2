@@ -50,7 +50,6 @@ def worflow_mediapipe(mediapipe_model,mediapipe_based_filter):
 
     return image, results
 
-
 def draw_holistic_results(image, results):
     
     # drawing_utils.draw_landmarks(
@@ -69,7 +68,6 @@ def draw_holistic_results(image, results):
     
     return image
 
-
 def draw_selected_points(image, results, indices):
     if results.pose_landmarks:
         h,w, _ = image.shape
@@ -82,7 +80,6 @@ def draw_selected_points(image, results, indices):
 
     return image
 
-
 def extract_pose(image, model, indices):
     """Run a media pipe model on one image and return coordinated of specific point
 
@@ -94,7 +91,6 @@ def extract_pose(image, model, indices):
     Returns:
         np.ndarray, 0
     """
-    
     try:
         results = model.process(image)
         list_pos = []
@@ -131,17 +127,95 @@ def process_image(folder_path, mediapipe_model, indices):
     database.to_csv("database.csv")
     return database
 
+def detection_pompe(mediapipe_model, indices):
+    """Run a media pipe model on each video frame grabbed by the webcam and draw results on it
+
+    Args:
+        mediapipe_model (): A mediapipe model
+        mediapipe_based_filter (): a function to draw model results on frame
+
+    Returns:
+        np.ndarray, mediapipe model result
+    """
+    cap = cv2.VideoCapture(0)
+
+    try:
+        with mediapipe_model as model:
+            while cap.isOpened():
+                success, image = cap.read()
+            
+                if not success:
+                    print("Ignoring empty camera frame.")
+                    continue
+        
+                try:
+                    results = model.process(image)
+                except Exception:
+                    results = None
+                
+                if results and results.pose_landmarks:
+                    list_pos = extract_pose(image, model, indices)
+                    if list_pos != 0:
+                        #applique le classifier
+                        counter = 0
+                        predicted_class = 0
+                        if predicted_class == 0:
+                            debut_pompe = True
+                        if predicted_class == 1 and debut_pompe == True:
+                            counter += 1
+                            debut_pompe = False
+
+                        #affichage de la classe:
+                        cv2.putText(
+                            image,
+                            f"Class: {predicted_class}",
+                            (30, 50),                  # position (x, y)
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1,                          # taille du texte
+                            (0, 255, 0),               # couleur verte
+                            2,
+                            cv2.LINE_AA
+                        )
+                        # --- Affichage du compteur ---
+                        cv2.putText(
+                            image,
+                            f"Count: {counter}",
+                            (30, 100),                 # juste en dessous de la classe
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1,
+                            (0, 255, 255),             # couleur jaune
+                            2,
+                            cv2.LINE_AA
+                        )
+                        result_image = image
+
+                else:
+                    result_image = image
+
+                cv2.imshow('MediaPipe', result_image)
+
+                if cv2.waitKey(5) & 0xFF == ord('q'):
+                    break
+
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()           
+
+    return image, results
         
 def main():
     mediapipe_model=Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5)
     indices = [12,14,16,11,13,15,23,24]
-    image_folder = Path("Images-pompes")
-    process_image(image_folder,mediapipe_model,indices)
+    last_image, last_results = detection_pompe(mediapipe_model=mediapipe_model,indices=indices)
+
+
+    # image_folder = Path("Images-pompes")
+    # process_image(image_folder,mediapipe_model,indices)
 
 
 
     # list = extract_pose(image,mediapipe_model,indices)
-    print(list)
+    # print(list)
 #     last_image, last_results = worflow_mediapipe(
 #     mediapipe_model=mediapipe_model,
 #     mediapipe_based_filter = lambda img, res: draw_selected_points(img, res, indices)
