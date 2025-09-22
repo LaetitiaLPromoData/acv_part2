@@ -91,7 +91,7 @@ def extract_pose(image, model, indices):
         for idx in indices:
             landmarks = results.pose_landmarks.landmark
             lm = landmarks[idx]
-            if lm.visibility > 0.2:
+            if lm.visibility >= 0:
                 list_pos.append((lm.x, lm.y,lm.z))
 
     except Exception:
