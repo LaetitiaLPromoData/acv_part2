@@ -53,13 +53,6 @@ def worflow_mediapipe(mediapipe_model,mediapipe_based_filter):
 
 def draw_holistic_results(image, results):
     
-    # drawing_utils.draw_landmarks(
-    #     image,
-    #     results.left_hand_landmarks,
-    #     mp.solutions.holistic.HAND_CONNECTIONS,
-    #     connection_drawing_spec=drawing_styles.get_default_hand_connections_style()
-    # )
-
     drawing_utils.draw_landmarks(
         image,
         results.pose_landmarks,
@@ -98,7 +91,9 @@ def extract_pose(image, model, indices):
         for idx in indices:
             landmarks = results.pose_landmarks.landmark
             lm = landmarks[idx]
-            list_pos.append((lm.x, lm.y,lm.z))
+            if lm.visibility > 0.2:
+                list_pos.append((lm.x, lm.y,lm.z))
+
     except Exception:
         list_pos = 0
         print("Error")
@@ -125,10 +120,10 @@ def process_image(folder_path, mediapipe_model, indices):
                 flat_list.append(i)
                 database.loc[len(database)] = flat_list  
     
-    database.to_csv("database.csv")
+    database.to_csv("database_2.csv")
     return database
 
-def detection_pompe(mediapipe_model, indices, classifier):
+def detection_pompe(mediapipe_model, indices, classifier,mediapipe_based_filter):
     """Run a media pipe model on each video frame grabbed by the webcam and draw results on it
 
     Args:
@@ -160,7 +155,9 @@ def detection_pompe(mediapipe_model, indices, classifier):
                 
                 if results and results.pose_landmarks:
                     list_pos = extract_pose(image, model, indices)
+                    label ='None'
                     if list_pos != 0:
+                        print(list_pos)
                         #formatage des valeurs
                         flat_list = [coord for landmark in list_pos for coord in landmark]
                         #applique le classifier
@@ -180,7 +177,6 @@ def detection_pompe(mediapipe_model, indices, classifier):
                         else :
                             label = "autre"
 
-
                         #affichage de la classe:
                         cv2.putText(
                             image,
@@ -193,8 +189,22 @@ def detection_pompe(mediapipe_model, indices, classifier):
                             cv2.LINE_AA
                         )
 
-                        result_image = image
-
+                        # result_image = image
+                        result_image = mediapipe_based_filter(image, results)
+                    else:
+                        label ='unknown'
+                        #affichage de la classe:
+                        cv2.putText(
+                            image,
+                            f"Class: {label}",
+                            (30, 50),                  # position (x, y)
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1,                          # taille du texte
+                            (100, 255, 0),               # couleur verte
+                            2,
+                            cv2.LINE_AA
+                        )
+                        result_image = mediapipe_based_filter(image, results)
                 else:
                     result_image = image
                 
@@ -229,7 +239,7 @@ def main():
     with open("knn_pipeline.pkl", "rb") as f:
         classifier = pk.load(f)
 
-    last_image, last_results = detection_pompe(mediapipe_model=mediapipe_model,indices=indices, classifier=classifier)
+    last_image, last_results = detection_pompe(mediapipe_model=mediapipe_model,indices=indices, classifier=classifier,mediapipe_based_filter=draw_holistic_results)
 
 
     # image_folder = Path("Images-pompes")
